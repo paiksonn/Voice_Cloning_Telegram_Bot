@@ -27,7 +27,7 @@ def ogg_to_wav_converter(input_file: str, output_file: str):
 #     data, samplerate = sf.read(input_file)
 #     sf.write(output_file, data, samplerate, format='OGG', subtype='VORBIS')    
 
-updater = Updater('6426199729:AAGAhHT25qO4WSqoYcGVYHUE9701l3CnXoU')
+updater = Updater('Your Telegramm token')
 dispatcher = updater.dispatcher
 
 def help_command(update, context):

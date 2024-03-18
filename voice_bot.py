@@ -5,6 +5,8 @@ import torch
 from TTS.api import TTS
 import soundfile as sf
 import random
+from bs4 import BeautifulSoup
+import requests
 
 
 def voice_clon(massage: str, input_wav: str, output_wav: str):
@@ -20,14 +22,9 @@ def voice_clon(massage: str, input_wav: str, output_wav: str):
 def ogg_to_wav_converter(input_file: str, output_file: str):
     # Конвертируем из ogg в wav
     data, samplerate = sf.read(input_file)
-    sf.write(output_file, data, samplerate, format='WAV', subtype='PCM_16')
-    
-# def wav_to_ogg_converter(input_file: str, output_file: str):
-#     # Конвертируем из wav в ogg
-#     data, samplerate = sf.read(input_file)
-#     sf.write(output_file, data, samplerate, format='OGG', subtype='VORBIS')    
+    sf.write(output_file, data, samplerate, format='WAV', subtype='PCM_16')  
 
-updater = Updater('Your TG bot token')
+updater = Updater('YOUR TELEGRAMM BOT TOKEN')
 dispatcher = updater.dispatcher
 
 def help_command(update, context):
@@ -35,14 +32,14 @@ def help_command(update, context):
 Доступные команды:
 /start - Начать работу с ботом и получить инструкции (можно использовать, чтобы перезаписать аудио)
 /mem - Получить случайный мем из предоставленной коллекции смешнявок (можно спамить эту команду бесконечно, но все мемы рандомные, поэтому автор бота не несет ответственности за чьи-то задетые чувства)
-/help - Получить список доступных команд
+/anekdot - Получить рандомный анекдот, озвученный Вашим прекрасным голосом
     """
     context.bot.send_message(chat_id=update.effective_chat.id, text=help_text)
 
 def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="Пожалуйста, отправьте голосовое сообщение на русском языке длиной от 20 до 40 секунд.")
     context.bot.send_message(chat_id=update.effective_chat.id, text="Для получения списка всех доступных команд введите /help")
-
+    context.bot.send_message(chat_id=update.effective_chat.id, text="Пожалуйста, отправьте голосовое сообщение на русском языке длиной от 20 до 40 секунд.")
+    
 def voice_handler(update, context):
     user_id = update.message.from_user.id
     file = context.bot.getFile(update.message.voice.file_id)
@@ -106,11 +103,56 @@ def send_random_mem(update, context):
     with open(random_mem, 'rb') as file:
         context.bot.send_photo(chat_id=update.effective_chat.id, photo=file)
 
+def get_anekdot():
+    url = 'https://www.anekdot.ru/author-best/years/?years=anekdot'
+    response = requests.get(url)
+    # Проверяем, успешно ли выполнен запрос
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Ищем все элементы с классом 'text', что соответствует тексту анекдота
+        anekdots = soup.find_all('div', class_='text')
+        
+        # Выбираем случайный анекдот из полученного списка
+        random_anekdot = random.choice(anekdots).get_text(strip=True)
+        return random_anekdot
+    else:
+        print("Произошла ошибка при получении страницы: статус", response.status_code)
+        return None
+
+def send_anekdot(update, context):
+    anekdot_text = get_anekdot()
+    wav_file = context.user_data.get('wav_file')
+    
+    if not wav_file:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Сначала отправьте голосовое сообщение."
+        )
+        return
+    
+    # Уведомление пользователя о начале генерации анекдота
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Итак, сейчас будет А Н Е К Д О Т"
+    )
+    
+    output_anek_wav = os.path.join(tempfile.gettempdir(), f'output_anek_{update.message.from_user.id}.wav')
+    
+    voice_clon(anekdot_text, wav_file, output_anek_wav)
+    
+    with open(output_anek_wav, 'rb') as f:
+        context.bot.send_voice(chat_id=update.effective_chat.id, voice=f)
+    
+    # Удаление выходного wav файла
+    os.remove(output_anek_wav)
+
 dispatcher.add_handler(CommandHandler('start', start))
 dispatcher.add_handler(MessageHandler(Filters.voice, voice_handler))
 dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), text_handler))
 dispatcher.add_handler(CommandHandler('mem', send_random_mem))
 dispatcher.add_handler(CommandHandler('help', help_command))
+dispatcher.add_handler(CommandHandler('anekdot', send_anekdot))
 
 updater.start_polling()
 updater.idle()
